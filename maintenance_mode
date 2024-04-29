@@ -59,7 +59,7 @@ function set_maintenance_mode() {
 while true
 do
 	echo '#!/bin/bash' > .menu
-	echo "whiptail --menu \"Change maintenance_mode\" 10 100 $NUM_NODES \\" >> .menu
+	echo "whiptail --menu \"Change maintenance_mode\" 20 100 $NUM_NODES \\" >> .menu
 	for I in $COUCHDB_NODES; do
 		if echo "$(get_maintenance_mode "$I")" | grep ERROR > /dev/null; then
 			echo "$I \": $(get_maintenance_mode "$I")\" \\" >> .menu
@@ -74,7 +74,7 @@ do
 
 	case "$TARGET_NODE" in
 		[a-z]*)
-			whiptail --menu "Net mode" 10 130 5 \
+			whiptail --menu "Net mode" 20 130 3 \
 				true ": The node will not respond to clustered requests from other nodes and the /_up endpoint will return a 404 response." \
 				nolb ": The /_up endpoint will return a 404 response." \
 				false ": The node responds normally, /_up returns a 200 response." \
