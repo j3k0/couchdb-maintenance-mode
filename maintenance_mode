@@ -14,7 +14,7 @@ fi
 echo "All good."
 
 #
-# Your CouchDB hosts should have a consistant naming, like:
+# CouchDB cluster node should have a consistant naming, like:
 #
 # couchdb@host-1.localdomain, couchdb@host-2.localdomain, couchdb@host-3.localdomain
 #
