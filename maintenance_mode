@@ -2,12 +2,12 @@
 set -e
 
 echo "Checking dependencies..."
-if ! which whiptail; then
+if ! which whiptail > /dev/null; then
   echo "ERROR: whiptail not found. Please install whiptail or fix your PATH."
   exit 1
 fi
 
-if ! which curl; then
+if ! which curl > /dev/null; then
   echo "ERROR: curl not found. Please install curl or fix your PATH."
   exit 1
 fi
@@ -39,7 +39,11 @@ function get_maintenance_mode() {
 	NODE="$1"
 	$CURL "$COUCH_URL/_node/$COUCHDB_NODE_USER@$NODE$COUCHDB_NODE_SUFFIX/_config/couchdb/maintenance_mode" > .maintenance_mode
 	if cat .maintenance_mode | grep error >/dev/null; then
-		cat .maintenance_mode | jq --raw-output '"ERROR: " + .reason'
+		if cat .maintenance_mode | grep 'unknown_config_value' > /dev/null; then
+			echo ""
+		else
+			cat .maintenance_mode | jq --raw-output '"ERROR: " + .reason'
+		fi
 	else
 		cat .maintenance_mode | tr -d \"
 	fi
@@ -70,7 +74,7 @@ do
 
 	case "$TARGET_NODE" in
 		[a-z]*)
-			whiptail --menu "Net mode" 10 130 3 \
+			whiptail --menu "Net mode" 10 130 5 \
 				true ": The node will not respond to clustered requests from other nodes and the /_up endpoint will return a 404 response." \
 				nolb ": The /_up endpoint will return a 404 response." \
 				false ": The node responds normally, /_up returns a 200 response." \
