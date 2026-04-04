@@ -1,0 +1,10 @@
+.env
+.maintenance_mode
+.menu
+.target_*
+.db_menu
+.design_menu
+.view_menu
+.tmp_design_doc
+.design_doc
+maintenance_mode.log

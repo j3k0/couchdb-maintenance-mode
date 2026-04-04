@@ -1,0 +1,20 @@
+services:
+  couchdb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: couchdb-maint-mode
+    ports:
+      - "5984:5984"
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=admin
+    env_file:
+      - .env
+    # Mount the bin directory for live iteration
+    volumes:
+      - couchdb_data:/opt/couchdb/data
+      - ./bin:/usr/local/bin:ro
+
+volumes:
+  couchdb_data:
