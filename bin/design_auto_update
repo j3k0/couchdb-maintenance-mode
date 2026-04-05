@@ -40,27 +40,25 @@ function load_databases() {
     echo "Loaded ${#ALL_DBS[@]} databases."
 }
 
-function toggle_view_auto_update() {
+function set_auto_update() {
     local DB="$1"
     local DESIGN_DOC="$2"
-    local VIEW_NAME="$3"
+    local VALUE="$3"
 
     # Fetch full design doc
     do_curl "$COUCH_URL/$DB/$DESIGN_DOC" > .design_doc
 
-    # Check current auto_update state (defaults to true if not set)
     local CURRENT
-    CURRENT=$(jq -r ".views.\"$VIEW_NAME\".options.auto_update // true" .design_doc)
-    local NEW
-    if [ "$CURRENT" = "true" ]; then
-        NEW=false
-    else
-        NEW=true
+    CURRENT=$(jq -r '.options.auto_update // true' .design_doc)
+
+    if [ "$CURRENT" = "$VALUE" ]; then
+        echo "$DB/$DESIGN_DOC auto_update already $VALUE"
+        return 0
     fi
 
-    # Update the design doc
+    # Update the design doc (ensure options object exists)
     local UPDATED
-    UPDATED=$(jq ".views.\"$VIEW_NAME\".options.auto_update = $NEW" .design_doc)
+    UPDATED=$(jq ".options.auto_update = $VALUE" .design_doc)
 
     # PUT and check for errors
     local RESPONSE
@@ -70,61 +68,76 @@ function toggle_view_auto_update() {
         return 1
     fi
 
-    echo "$(date --iso-8601=minutes) $DB/$DESIGN_DOC/$VIEW_NAME auto_update $CURRENT -> $NEW" | tee -a "$COUCHDB_MAINT_LOG"
+    echo "$(date --iso-8601=minutes) $DB/$DESIGN_DOC auto_update $CURRENT -> $VALUE" | tee -a "$COUCHDB_MAINT_LOG"
 }
 
-function run_toggle_view_menu() {
-    # Select database
+function run_auto_update_menu() {
+    # Step 1: Select database
     local DB_MENU=""
+    local db_count=0
     for db in "${ALL_DBS[@]}"; do
-        DB_MENU+="$db \"$db\" "
+        local ddoc_json="${DESIGN_DOCS["$db"]}"
+        local ddoc_count
+        ddoc_count=$(echo "$ddoc_json" | jq -r '.rows | length' 2>/dev/null || echo 0)
+        [ "$ddoc_count" = "0" ] && continue
+        DB_MENU+="$db \"$ddoc_count design doc(s)\" "
+        db_count=$((db_count + 1))
     done
-    echo "whiptail --menu \"Select Database\" 20 80 ${#ALL_DBS[@]} ${DB_MENU} 2> .target_db" > .db_menu
+    [ "$db_count" = "0" ] && echo "No databases with design documents found." && return 1
+    echo "whiptail --menu \"Select Database\" 20 80 $db_count ${DB_MENU} 2> .target_db" > .db_menu
     chmod +x .db_menu && ./.db_menu
     local SELECTED_DB
     SELECTED_DB=$(cat .target_db)
     [ -z "$SELECTED_DB" ] && return 1
 
-    # Extract design docs for selected DB
+    # Step 2: Select design doc (showing current auto_update value)
     local DESIGN_JSON="${DESIGN_DOCS["$SELECTED_DB"]}"
     local DESIGN_IDS
     DESIGN_IDS=($(echo "$DESIGN_JSON" | jq -r '.rows[].id'))
 
     local DESIGN_MENU=""
     for d in "${DESIGN_IDS[@]}"; do
-        DESIGN_MENU+="$d \"$d\" "
+        local current
+        current=$(echo "$DESIGN_JSON" | jq -r ".rows[] | select(.id == \"$d\") | .doc.options.auto_update // true")
+        DESIGN_MENU+="$d \"auto_update=$current\" "
     done
-    echo "whiptail --menu \"Select Design Doc\" 20 80 ${#DESIGN_IDS[@]} ${DESIGN_MENU} 2> .target_design" > .design_menu
+    echo "whiptail --menu \"Select Design Doc ($SELECTED_DB)\" 20 80 ${#DESIGN_IDS[@]} ${DESIGN_MENU} 2> .target_design" > .design_menu
     chmod +x .design_menu && ./.design_menu
     local SELECTED_DESIGN
     SELECTED_DESIGN=$(cat .target_design)
     [ -z "$SELECTED_DESIGN" ] && return 1
 
-    # Fetch design doc to list its views
-    do_curl "$COUCH_URL/$SELECTED_DB/$SELECTED_DESIGN" > .tmp_design_doc
-    local VIEW_NAMES
-    VIEW_NAMES=($(jq -r '.views | keys[]' .tmp_design_doc))
+    # Step 3: Select value
+    local CURRENT_VALUE
+    CURRENT_VALUE=$(echo "$DESIGN_JSON" | jq -r ".rows[] | select(.id == \"$SELECTED_DESIGN\") | .doc.options.auto_update // true")
+    whiptail --menu "Set auto_update for $SELECTED_DB/$SELECTED_DESIGN (current: $CURRENT_VALUE)" 20 80 2 \
+        true  ": Views are updated on every read request" \
+        false ": Views are only updated on explicit build request" \
+        2> .target_value
+    local SELECTED_VALUE
+    SELECTED_VALUE=$(cat .target_value)
+    [ -z "$SELECTED_VALUE" ] && return 1
 
-    local VIEW_MENU=""
-    for v in "${VIEW_NAMES[@]}"; do
-        VIEW_MENU+="$v \"$v\" "
-    done
-    echo "whiptail --menu \"Select View\" 20 80 ${#VIEW_NAMES[@]} ${VIEW_MENU} 2> .target_view" > .view_menu
-    chmod +x .view_menu && ./.view_menu
-    local SELECTED_VIEW
-    SELECTED_VIEW=$(cat .target_view)
-    [ -z "$SELECTED_VIEW" ] && return 1
-
-    toggle_view_auto_update "$SELECTED_DB" "$SELECTED_DESIGN" "$SELECTED_VIEW"
+    set_auto_update "$SELECTED_DB" "$SELECTED_DESIGN" "$SELECTED_VALUE"
 }
 
 # Entry point: CLI mode or interactive mode
-if [ "${1:-}" = "toggle" ] && [ $# -eq 4 ]; then
-    toggle_view_auto_update "$2" "$3" "$4"
+if [ "${1:-}" = "set" ] && [ $# -eq 4 ]; then
+    # CLI: design_auto_update set <db> <design_doc> <true|false>
+    set_auto_update "$2" "$3" "$4"
+elif [ "${1:-}" = "toggle" ] && [ $# -eq 3 ]; then
+    # CLI: design_auto_update toggle <db> <design_doc>
+    do_curl "$COUCH_URL/$2/$3" > .design_doc
+    CURRENT=$(jq -r '.options.auto_update // true' .design_doc)
+    if [ "$CURRENT" = "true" ]; then
+        set_auto_update "$2" "$3" false
+    else
+        set_auto_update "$2" "$3" true
+    fi
 else
     load_databases
     while true; do
-        run_toggle_view_menu || break
+        run_auto_update_menu || break
         sleep 1
     done
 fi
