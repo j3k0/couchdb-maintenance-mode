@@ -41,6 +41,18 @@ A terminal UI tool written in bash that manages CouchDB cluster node maintenance
 
 - GET/PUT `$COUCH_URL/_node/<node>/_config/couchdb/maintenance_mode`
 
+## Development
+
+- **Docker-only runtime**: Scripts run inside Debian-based CouchDB container; GNU coreutils assumed (`date --iso-8601`)
+- **Docker volume issue**: `./bin:/usr/local/bin:ro` mount clobbers CouchDB's `docker-entrypoint.sh` — container won't start. Needs fix (mount individual files or use different path)
+- **Syntax check**: `bash -n bin/<script>` to validate without running
+- **Test**: `bin/test_toggle_view.sh` requires running CouchDB; uses CLI mode (`design_auto_update toggle <db> <ddoc> <view>`)
+
+## Code Patterns
+
+- **HTTP calls**: Use `do_curl()` function, not a `$CURL` string variable (embedded quotes don't survive word splitting)
+- **Logging**: Both scripts log to `$COUCHDB_MAINT_LOG` (default `./maintenance_mode.log`)
+
 ## Temp Files
 
 - `.maintenance_mode`: Stores raw API response
