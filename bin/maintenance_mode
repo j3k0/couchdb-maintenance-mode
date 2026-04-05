@@ -69,10 +69,10 @@ do
     echo '#!/bin/bash' > .menu
     echo "whiptail --menu \"Change maintenance_mode\" 20 100 $NUM_NODES \\" >> .menu
     for I in $COUCHDB_NODES; do
-        if echo "$(get_maintenance_mode \"$I\")" | grep ERROR > /dev/null; then
-            echo "$I \" : $(get_maintenance_mode \"$I\")\" \\" >> .menu
+        if echo "$(get_maintenance_mode "$I")" | grep ERROR > /dev/null; then
+            echo "$I \" : $(get_maintenance_mode "$I")\" \\" >> .menu
         else
-            echo "$I \" : maintenance_mode=\\\"$(get_maintenance_mode \"$I\")\\\"\" \\" >> .menu
+            echo "$I \" : maintenance_mode=\\\"$(get_maintenance_mode "$I")\\\"\" \\" >> .menu
         fi
     done
     echo '2> .target_node' >> .menu
